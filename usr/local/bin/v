@@ -237,15 +237,15 @@ cat >> /etc/portage/make.conf << 'EOF'
 
 #ABI_X86="64 32"  
 ACCEPT_LICENSE="*"
-RUBY_TARGETS="ruby22 ruby23"
+RUBY_TARGETS="ruby23"
 GRUB_PLATFORMS="emu pc"
 #USE_PYTHON='2.7'
-USE_PYTHON='2.7 3.4'
+USE_PYTHON='2.7 3.6'
 PYTHON_SINGLE_TARGET="python2_7"
-#PYTHON_SINGLE_TARGET="python3_4"
+#PYTHON_SINGLE_TARGET="python3_6"
 #PYTHON_SINGLE_TARGET="python3_5"
-PYTHON_TARGETS="python2_7 python3_4"
-PYTHON_ABIS="2.7 3.4"
+PYTHON_TARGETS="python2_7 python3_6"
+PYTHON_ABIS="2.7 3.6"
 POSTGRES_TARGETS="postgres10"
 #-postgres9_2 -postgres9_3 -postgres9_4 -postgres9_5 -postgres9_6"
 CPU_FLAGS_X86="${CPU_FLAGS_X86} mmxext sse sse2 sse3 ssse3"
@@ -649,19 +649,20 @@ config() {
 wget -c https://github.com/pwasiewi/gentools/archive/master.zip -O/master.zip
 cd /
 [ -e gentools-master ] && rm -rf gentools-master
-[ -e master.zip ] && unzip master.zip && cd gentools-master && tar Jcf config.txz * && mv config.txz / && cd / && rm -rf gentools-master master.zip
+[ -e master.zip ] && unzip -qq master.zip && cd gentools-master && tar Jcf config.txz * && mv config.txz / && cd / && rm -rf gentools-master master.zip
 }
 
 cross() {
-	echo USE="-fortran nossp nopie hardened" crossdev -t armv7a-hardfloat-linux-gnueabi --stable  --gcc 7.3.0-r3 --libc 2.26-r6 --kernel 4.16.12 -oO /usr/portage
-	time USE="-fortran nossp nopie hardened" crossdev -t armv7a-hardfloat-linux-gnueabi --stable  --gcc 7.3.0-r3 --libc 2.26-r6 --kernel 4.16.12 -oO /usr/portage
+	echo USE="-fortran hardened" crossdev -t armv7a-hardfloat-linux-gnueabi --stable  --gcc 7.3.0-r3 --libc 2.26-r7 --kernel 4.16.12 -oO /usr/portage
+	time USE="-fortran hardened" crossdev -t armv7a-hardfloat-linux-gnueabi --stable  --gcc 7.3.0-r3 --libc 2.26-r7 --kernel 4.16.12 -oO /usr/portage
 }
 
 crossfirst() {
      	crossdev -C armv7a-hardfloat-linux-gnueabi -f
      	crossdev -C armv7a-hardfloat-linux-gnueabi -f
 	cross
-	[ -e /usr/armv7a-hardfloat-linux-gnueabi.orig ] && rm -rf /usr/armv7a-hardfloat-linux-gnueabi.orig && cp -a /usr/armv7a-hardfloat-linux-gnueabi /usr/armv7a-hardfloat-linux-gnueabi.orig
+	[ -e /usr/armv7a-hardfloat-linux-gnueabi.orig ] && rm -rf /usr/armv7a-hardfloat-linux-gnueabi.orig 
+	cp -a /usr/armv7a-hardfloat-linux-gnueabi /usr/armv7a-hardfloat-linux-gnueabi.orig
 }
 
 1arm() {
@@ -698,8 +699,7 @@ crossfirst() {
 2arm() {
     cat > $PROFILETMP/vcportdir << 'EOF'
 cd /usr
-wget -c http://gentoo.prz.rzeszow.pl/snapshots/portage-latest.tar.xz
-tar Jxf portage-latest.tar.xz
+emerge-webrsync
 [ -e /usr/portage/distfiles ] && rmdir /usr/portage/distfiles
 [ ! -e /var/tmp/distfiles ] && mkdir /var/tmp/distfiles
 ln -sfn /var/tmp/distfiles /usr/portage/distfiles
@@ -721,7 +721,7 @@ veu "media-libs/mesa -vaapi"
 veu "gnome-base/librsvg -tools"
 veu "sys-devel/distcc crossdev"
 vex sys-devel/crossdev
-vex sys-kernel/genkernel
+vex sys-kernel/genkernel-next
 vex x11-libs/pango
 vex sys-devel/gcc
 #vep sys-devel/gcc-4.9.4
@@ -742,10 +742,57 @@ EOF
 }
 
 3arm() {
-        #trwa 40min
+        #trwa 300min, gdyż tylko w qemu-binfmt chroocie się kompiluje
+        time armv7a-1by1crossroot "ec u p =gcc-7.3.0-r3"
+    	cat > $PROFILETMP/vcportdir << EOF
+	gcc-config 6
+	. /etc/profile; env-update
+	fix_libtool_files.sh 5.4.0
+EOF
+        chmod +x $PROFILETMP/vcportdir
+        mount_all
+        chroot $CHROOT /tmp/livecd/vcportdir
+        umount_all
+}
+
+4arm() {
+        #trwa 2min
+        time armv7a-1by1crossroot "ec u p n glibc"
+        #trwa 4min
         time armv7a-1by1crossroot "ec u p vim"
+        #trwa 1min
         time armv7a-1by1crossroot "ec u p bc"
+        #trwa 14min
         time armv7a-1by1crossroot "ec u p genkernel"
+        #trwa 4min
+        time armv7a-1by1crossroot "ec u p gentoolkit"
+        #trwa 1min
+        time armv7a-1by1crossroot "ec u p eix"
+    	cat > $PROFILETMP/vcportdir << EOF
+sed -i 's/\ -X\ /\ X\ /g' /etc/portage/make.conf
+vex media-libs/fontconfig
+vep sys-libs/readline-7.0_p3
+vep sys-libs/gdbm-1.13-r2
+vep app-shells/bash-4.4_p12
+vep dev-lang/perl-5.24.3-r1
+vep x11-libs/gtk+-3.22.29
+vep app-editors/vim-8.0.1298
+EOF
+	chmod +x $PROFILETMP/vcportdir
+        mount_all
+	chroot $CHROOT /tmp/livecd/vcportdir
+	umount_all
+ 	#trwa 172min, gdyż kompilacja m.in. mesa w qemu chroocie trwa 52min, jeśli crosscompiler z hosta by je kompilował byłoby z 10razy krócej
+	time armv7a-1by1crossroot "ec u p distcc"
+        #trwa 30min i nie wszystko się skompiluje, zatem może to pominąć
+        time armv7a-1by1crossroot "ec p w"
+        #trwa 4min
+	time armv7a-1by1crossroot "ec u p xorg-server" 
+        #trwa 1min
+	time armv7a-1by1crossroot "ec u p openbox"
+}
+
+5arm() {
     	cat > $PROFILETMP/vcportdir << EOF
 cd /usr/src
 [ ! -e linux-${KERNEL_ARM}.tar.gz ] && wget -O linux-${KERNEL_ARM}.tar.gz https://github.com/raspberrypi/linux/archive/${KERNEL_ARM}.tar.gz
@@ -762,27 +809,6 @@ cd $CHROOT/usr/src/linux
 make ARCH=arm CROSS_COMPILE=${CROSS_COMPILE} oldconfig
 make ARCH=arm CROSS_COMPILE=${CROSS_COMPILE} -j4
 make ARCH=arm CROSS_COMPILE=${CROSS_COMPILE} modules_install INSTALL_MOD_PATH=$CHROOT
-}
-
-4arm() {
- 	#trwa 40 min
-    	cat > $PROFILETMP/vcportdir << EOF
-	sed -i 's/\ -X\ /\ X\ /g' /etc/portage/make.conf
-EOF
-	chmod +x $PROFILETMP/vcportdir
-        mount_all
-	chroot $CHROOT /tmp/livecd/vcportdir
-	umount_all
-        time armv7a-1by1crossroot "ec u p gentoolkit"
-        time armv7a-1by1crossroot "ec u p eix"
-        time armv7a-1by1crossroot "ec p w"
-	time armv7a-1by1crossroot "ec u p distcc" #41min
-}
-
-5arm() {
- 	#trwa ponad 3.5 godziny, gdyż llvm w chroocie 80min, mesa 46min, jeśli crosscompiler z hosta by je compilował byłoby z 10razy krócej
-	time armv7a-1by1crossroot "ec u p xorg-server" #160min na gentoo
-	time armv7a-1by1crossroot "ec u p openbox"
 }
 
 genkernel() {
@@ -973,6 +999,8 @@ case "$2" in
     	5arm            ;;
     0)	
     	0etap           ;;
+    1e)	
+    	1etap           ;;
     1)	
      	0etap
     	1etap           ;;

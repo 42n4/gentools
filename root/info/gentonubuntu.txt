@@ -9,46 +9,51 @@ I. INSTALACJA Z OFICJALNEGO LUB UBUNTU LIVEDVD/USB NA VIRTUALBOX
 ##############################################################
 #1etap
 #------------------------------------------------------------
+
 sudo su -
+
 #------------------------------------------------------------
 #Skrypty do screencastów o sprawnej instalacji gentoo http://bit.ly/gentools
 #------------------------------------------------------------
-#STARSZA WERSJA skryptów (PRZESTARZAŁA): wget -c http://bit.ly/gentools00  -O/config.txz
+#STARSZA WERSJA skryptów (PRZESTARZAŁA): wget -c http://bit.ly/gentools01  -O/config.txz
 #NOWSZA WERSJA skryptów: 
-wget -c http://bit.ly/gentools01 -O/config.txz
+
+wget https://raw.githubusercontent.com/pwasiewi/gentools/master/usr/local/bin/gentoolcfg
+chmod 755 ./gentoolcfg
+./gentoolcfg #utworzy /config.txz ze źródeł z gentools repozytorium
 cd / && tar Jxvf config.txz && cd
+
 #------------------------------------------------------------
 #zainstaluj vim, jak go nie ma
+
 #na Gentoo LiveDVD: emerge vim
+
 #na Ubuntu LiveDVD: apt install vim
 #------------------------------------------------------------
+
 v a p #edytuj settings chroot na /dev/sda5 
+
 #------------------------------------------------------------
 #RAMDISK=1 instalacja izolowana np. z UbuntuLiveDVD bez wspolnego np. portage z hostem
 #UWAGA /dev/sda5 to partycja roota dla dysku z wirtualboxa
 #uwaga na symbol /DEV/SDA, czy opisuje on wlasciwy dysk
 #POCZATEK - ustawianie partycji w virtualboxie, kiedy dysk /dev/sda jest niezajęty
 #------------------------------------------------------------
-parted -s /dev/sda mklabel gpt
-parted /dev/sda mkpart primary fat32 1MiB 5MiB
-parted /dev/sda mkpart primary fat32 5MiB 205MiB
-parted /dev/sda mkpart primary ext4 205MiB 405MiB
-parted /dev/sda mkpart primary linux-swap 405MiB 1405MiB
-parted /dev/sda mkpart primary ext4 1405MiB 100%
-parted /dev/sda set 1 bios on
-mkfs.ext4 /dev/sda3 -F
-mkswap /dev/sda4
-swapon /dev/sda4
-mkfs.ext4 /dev/sda5 -F
+
+genformathdemo /dev/sda
+
 #------------------------------------------------------------
 #KONIEC  - ustawianie partycji w virtualboxie-----------------
 #W razie ponownych zmian usuwanie partycji:
 #for v_partition in $(parted -s /dev/sda print|awk '/^ / {print $1}'); do parted -s /dev/sda rm ${v_partition}; done
 #Rozmiar dysku: parted -s /dev/sda print|awk '/^Disk/ {print $3}'|sed 's/[Mm][Bb]//'
 #------------------------------------------------------------
+
 v a f #sciagnij stage3/4
-v a 1 #rozpakuj stage3/4, portage i popraw make.conf, vim
-v a e #chroot na nowy system gentoo
+#etap trwa 23min
+time v a 1 #rozpakuj stage3/4, portage i popraw make.conf, vim
+v a e #chroot na nowy system gentoo do zmiany hasła
+
 #------------------------------------------------------------
 #POCZATEK wpisywania komend: v a e 
 #jak potrzeba edytuj fstab:  vim /etc/fstab
@@ -57,6 +62,7 @@ v a e #chroot na nowy system gentoo
 #KONIEC   wpisywania komend: v a e 
 #REBOOT i dalsza instalacja np. plasma-meta
 #------------------------------------------------------------
+
 reboot
 
 ##############################################################
