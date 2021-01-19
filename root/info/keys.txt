@@ -86,6 +86,10 @@ hkp://pool.sks-keyservers.net (server pool, also supports secured key requests o
 hkp://zimmermann.mayfirst.org (also supports secured key requests over TLS)
 http://keyserver.ubuntu.com
 
+#ENTROPY
+#https://www.digitalocean.com/community/tutorials/how-to-setup-additional-entropy-for-cloud-servers-using-haveged
+cat /proc/sys/kernel/random/entropy_avail
+
 #USES OF PGP KEY
 echo "test message string" | gpg --encrypt --armor --recipient $KEYID -o encrypted.txt
 gpg --decrypt --armor encrypted.txt
@@ -94,13 +98,15 @@ echo "test message string" | gpg --armor --clearsign > signed.txt
 gpg --verify signed.txt
 
 gpg --list-keys
-git config --global user.signingKey $KEYID
 git config user.signingKey $KEYID
+git config --global user.signingKey $KEYID
 # write to ~/.gitconfig
-git config --global commit.gpgsign true
-git config alias.cs "commit -S -a"
 git log --show-signature
 git show --show-signature
+git config --global commit.gpgsign true
+git config --global alias.cs "commit -S -a"
+git config --global alias.logs "log --show-signature"
+git config --global alias.shows "show --show-signature"
 git verify-commit --raw $COMMIT_ID
 # https://github.com/git/git/blob/master/Documentation/pretty-formats.txt#L153-L224
 git log --show-signature --pretty=format:"%H %ae %n %G?  %GS %GK"
@@ -142,16 +148,6 @@ keybase pgp gen
 git clone keybase://private/pwasiewi/encrypted
 
 
-cryptsetup luksFormat /dev/sde3
-cryptsetup open /dev/sdf3 encrypted
-mkfs.btrfs /dev/mapper/encrypted
-cryptsetup close /dev/mapper/encrypted
-# podaj nazwę partycji w btrfs zlib i katalog w /mnt np.: unzlib sde3 ca
-unzlib sde3 ca 
-# zablokuj zaszyfrowany usb
-lock sde3 ca 
-
-
 export GPG_TTY="$(tty)"
 #export SSH_AUTH_SOCK="/run/user/$UID/gnupg/S.gpg-agent.ssh"
 export SSH_AUTH_SOCK=$(gpgconf --list-dirs agent-ssh-socket)
@@ -160,3 +156,28 @@ gpg-connect-agent updatestartuptty /bye
 
 # https://wiki.gentoo.org/wiki/Systemd
 # add gpg to systemd
+
+
+# CRYPTSETUP
+cryptsetup luksFormat /dev/sdx3
+cryptsetup open /dev/sdx3 encrypted
+mkfs.btrfs /dev/mapper/encrypted
+#mkfs.ext3 -j -m 1 -O dir_index,filetype,sparse_super /dev/mapper/encrypted
+cryptsetup close /dev/mapper/encrypted
+# podaj nazwę partycji w btrfs zlib i katalog w /mnt np.: unzlib sdx3 ca
+unzlib sdx3 ca 
+# zablokuj zaszyfrowany usb
+lock sdx3 ca 
+cryptsetup luksDelKey /dev/sdx3
+cryptsetup luksAddKey /dev/sdx3
+
+/sbin/badblocks -c 10240 -s -w -t random -v /dev/
+bonnie++ -f -d /dev/mapper/encrypted -s 4024 -n 0 -u root
+
+# https://wiki.gentoo.org/wiki/Pam_u2f
+pamu2fcfg -upwas > /etc/u2f_mappings
+pamu2fcfg -n >> /etc/u2f_mappings # add next security keys
+vim /etc/pam.d/system-local-login
+auth      required pam_u2f.so    authfile=/etc/u2f_mappings nouserok
+#auth      sufficient pam_u2f.so  authfile=/etc/u2f_mappings nouserok cue
+
